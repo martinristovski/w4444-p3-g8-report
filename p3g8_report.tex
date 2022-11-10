@@ -11,9 +11,15 @@
 
 \pagebreak
 
-\section{The Problem}
+\section{Introduction}
 
-<TODO>: COPY AND EXTEND PROBLEM DESCRIPTION FROM COURSE WEBSITE.
+A Magical Code is the third project of COMS W4444 taught by Professor Kenneth Ross in the Fall 2022 semester at Columbia University. In class, we discussed several different ideas on how to most accurately and robustly encode messages with a deck of cards. Our group consists of 3 members: Jeffrey Tao, Martin Ristovski, and Vikram Rajan. In this report, we will define the specifications of the problem, discuss our initial thoughts and ideas, and then detail the final solution we implemented. 
+
+\subsection{Problem Specification}
+
+The premise of A Magical Code is to encode a secret message you want to send to someone, but only using a standard deck of playing cards. As there are only 52 cards, there is a limit on the length of message we can send, but our job was to see just how long of a message we could send and still send meaningful information. Another limiting factor we faced was the ability of our decks to withstand random shuffling. In the war analogy this problem was presented to us as, this was to circumvent suspicious guards by showing them there could not possibly be a message contained in the deck of cards, as you can randomly shuffle the top cards many times. Given these constraints, we have to be able to encode and decode a message in the deck, but also be able to label random decks as NULL. 
+
+The goal is to be able to send as long as a message as possible given the constraints. Another option is to recover a partial message, as this would be more advantageous than recovering gibberish. These partial matches have to be specifically indicated, thus requiring some bits to do so. It also must be an exact prefix match, so it cannot randomly splice together parts of the original message, as that might not mean anything to the receiver. 
 
 \section{Initial Implementation}
 
@@ -32,7 +38,9 @@ This allowed us to encode messages that consist of lowercase characters in the E
 While our soltuion performed well within this limited message domain, to do well on the tournament there were a number of extensions that we'd need to make. 
 
 \subsection{Checksum}
-One of the easier adjustments was made in order to reduce the rate of checksum collision to further avoid false positives, To accomplish this, we increased the length of our checksum from 8 to 10 bits, which gave us a 4x reduction in the false positive rate.
+One of the easier adjustments we made was in order to reduce the rate of checksum collision to further avoid false positives. The purpose of the checksum is to prevent the decoder from deciphering random decks as meaningful messages; however, with the random shuffles, there would be times where the checksum would pass for an invalid message. With an 8-bit checksum, we expected this false positive rate to be 1 out of 256, but the rate we recorded was significantly higher. To accomplish this, we increased the length of our checksum from 8 to 10 bits, which gave us a 4x reduction in the false positive rate.
+
+The variable-length checksum function we implemented took advantage of a cryptographic hashing function called sha256 from Python's hashlib library. This takes in the bitstring, creates a hash as a long hexstring, which we then convert to binary and take the lowest x bits. 
 
 \subsection{Multiple Domains}
 Then, we added support for multiple message domains. Implementing multiple domains allowed us to use a more efficient encoding scheme for each domain, which in turn decreased the length of our message and made it more resistant to shuffles. However, we also had to dedicate 3 bits of our bitstring to let the decoder know which scheme was used to encode the message. In our testing, this was a worthwhile tradeoff. We added a number of character-based encoding schemes, which also used Huffman coding but with a different set of charcters and thus a different frequency distribution. In particular, we added a domain containing only numbers, a domain containing charcters typically found in English writing (uppercase and lowercase letters, numbers, space, and a few punctuation marks), and a domain containing all printable ASCII characters, which we used as a fallback of sorts, since it is able to encode any message at the cost of efficiency.
