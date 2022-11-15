@@ -1,6 +1,8 @@
 \documentclass{article}
 
 \usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage[noabbrev,nameinlink]{cleveref}
 
 \title{Project 3 - Group 8}
 \author{Jeffrey Tao, Martin Ristovski, Vikram Rajan}
@@ -25,24 +27,41 @@ The goal is to be able to send as long as a message as possible given the constr
 
 \section{Initial Implementation}
 
-The first idea that came to mind was to take our message of characters and encode it into a bitstring. To do this, we got a frequency distribution of the letters of the alphabet in English, and used that to generate a Huffman coding. Now that we had a mapping from characters to bits, we needed a mapping from bits to cards. To do this, we take our bitstring and the number n cards we want to encode it in. Assuming the integer value of the binary string is less than n!, we divide that up into n bins of size (n-1)!. Then we go segment by segment of the bitstring, and choosing the biggest bin number based off the remaining cards, as the cards can not be reused. These cards go to the bottom of the deck, to remain the most resistant to shuffles, and the rest of the cards are placed on top. 
+\subsection{Separating Messages, Bits, and Cards}
+As discussed in class, we implemented separate schemes for encoding string messages to bits and for encoding bits to cards. This allowed us to work on these parts independently and optimize them separately. As the project wore on, this strategy bore fruit as it enabled us to write many different message-to-bits encoders for the different tournament message domains.
 
-The decode function works in exactly the reverse of this, iterating card by card and checking what the corresponding bin number would be, and combining those to ultimately convert the deck back into the original bitstring. Once we retrieve the intended bitstring from the deck of cards, we break it up into the individual words, as we know the length of the message and bits per word. We convert each of these individual bitstrings into their respective integers, and assuming they are a valid index in our list of words, we translate them. 
+\subsection{Message-to-bits: Huffman Coding}
+Our initial intuition for encoding messages to bits was to exploit the disparity between how frequently letters occur in the English language. To do this, we found a frequency distribution of the letters of the alphabet in English and used that to generate a Huffman coding. Huffman coding works on the principle that more common characters should have shorter encodings, and less common characters can have longer encodings. Huffman coding is also a \textit{prefix encoding}, meaning that decoding requires no backtracking, as each character has a unique prefix such that decoding is unambiguous. When a character is matched, it is safe to emit that character.
 
-To make sure that our solution had few false positives, we implemented a checksum generator, which took as input the bitstring of the compressed message, and then we appended the 8-bit output of that checksum to our bitstring.
+\subsection{Bits-to-cards: Card Index Encoding}
+Now that we had a mapping from characters to bits, we needed a mapping from bits to cards. To do this, we take our bitstring and the number $c$ cards we want to encode it in. Assuming the integer value of the binary string is less than $c!$, we divide that up into $c$ bins of size $(c-1)!$. We proceed bit-by-bit, choosing indexes according to the ordering of the remaining un-used cards, as cards can not be reused. Finally, the message encoded in $c$ cards goes at the bottom of the deck, as cards towards the bottom are more resistant to shuffles. The top of the deck is padded with the remaining $52-c$ cards in order.
 
-This allowed us to encode messages that consist of lowercase characters in the English alphabet and reliably decode them for high numbers of shuffles. A plot of our performance in this message domain is given below.
+Decoding requires a known value of $c$ (discussed below in \cref{metadata}). Given $c$, we first filter out all card with values $> c$, as they are irrelevant and may have been mixed into the bottom cards due to shuffles. We recover the input bit string by performing the reverse indexing process: for each place value, we know the bin width, and can find the index of the bin via the index of the current card in the ordering of all currently remaining cards. After recovering the bit string, we can try to decode the message.
 
-<TODO>: INSERT PLOT.
+\subsection{Metadata} \label{metadata}
+We store metadata at the end of our message, where it is most durable. Our initial message metadata consisted of a length byte and a checksum byte. As the project went on, we changed our metadata logic to make these fields variable in length, removed the length byte, and added bits to denote different string-to-bits message encodings.
+
+We do not actually know the value of $c$ used to encode bits in the deck. As such, in order to recover the bit string, we need to try every possible value of $c$. However, without some protections, we could recover any bit string from any deck, making recovering the original mesasge impossible. As such, we introduced a checksum to the bitstring. The checksum is computed by taking some function over the bits of the message and appending the output bits to the message. As long as the checksum is of a known length, we can recover messages by trying many values of $c$, taking the last bits as the message checksum, re-computing the checksum function over the remaining bits, and seeing if they match. If they do match, we have high confidence that this is the message that we intended to recover. If they do not match, we are guaranteed that this is not the message we wanted to recover.
+
+Furthermore, due to our bits-to-cards integer encoding scheme, we found that leading 0's would be dropped when decoding the bit string from cards. As such, we elected to add a length byte to the message metadata. A better solution to this problem is discussed in \cref{no_length_byte}.
+
+Our early performance was already quite promising, shown in \Cref{fig:early_agent}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/early_agent.png}
+    \caption{Our initial agent's performance on sequences of lowercase letters drawn uniformly randomly. The vertical axis shows recovery rate, i.e. the proportion of messages that are exactly recovered. Number of shuffles increases along the horizontal axis. Each color encodes the length of the message: longer messages tend to be harder to recover, while shorter messages survive more shuffles.}
+    \label{fig:early_agent}
+\end{figure}
 
 \section{Improvements}
 
-While our soltuion performed well within this limited message domain, to do well on the tournament there were a number of extensions that we'd need to make. 
+While our solution performed well within this limited message domain, to do well on the tournament there were a number of extensions that we'd need to make. 
 
-\subsection{Checksum}
+\subsection{Better Checksum}
 One of the easier adjustments we made was in order to reduce the rate of checksum collision to further avoid false positives. The purpose of the checksum is to prevent the decoder from deciphering random decks as meaningful messages; however, with the random shuffles, there would be times where the checksum would pass for an invalid message. With an 8-bit checksum, we expected this false positive rate to be 1 out of 256, but the rate we recorded was significantly higher. To accomplish this, we increased the length of our checksum from 8 to 10 bits, which gave us a 4x reduction in the false positive rate.
 
-The variable-length checksum function we implemented took advantage of a cryptographic hashing function called sha256 from Python's hashlib library. This takes in the bitstring, creates a hash as a long hexstring, which we then convert to binary and take the lowest x bits. 
+The variable-length checksum function we implemented took advantage of a cryptographic hashing function called sha256 from Python's hashlib library. This takes in the bitstring, creates a hash as a long hexstring, which we then convert to binary and take the lowest x bits. Having a configurable checksum length also proved to be a boon later in the project as it allowed us to experiment freely with checksum lengths to tweak messsage recovery performance.
 
 \subsection{Multiple Domains}
 Then, we added support for multiple message domains. Implementing multiple domains allowed us to use a more efficient encoding scheme for each domain, which in turn decreased the length of our message and made it more resistant to shuffles. However, we also had to dedicate 3 bits of our bitstring to let the decoder know which scheme was used to encode the message. In our testing, this was a worthwhile tradeoff. We added a number of character-based encoding schemes, which also used Huffman coding but with a different set of characters and thus a different frequency distribution. In particular, we added a domain containing only numbers, a domain containing charcters typically found in English writing (uppercase and lowercase letters, numbers, space, and a few punctuation marks), and a domain containing all printable ASCII characters, which we used as a fallback of sorts, since it is able to encode any message at the cost of efficiency.
@@ -51,6 +70,11 @@ Then, we added support for multiple message domains. Implementing multiple domai
 We further extended our multiple domain approach by implementing word-based encoding schemes. These would map words to integers that referrenced each word's position in a dictionary, allowing the decoder to simply look up each word. This meant that if all words in a message are present in our dictionary, we could encode much longer messages than if we were to use a character-based encoding scheme. The dictionaries we initially included were one of a large number of words in the English language, one of names of people, and one of names of places.
 
 <TODO>: INSERT PLOTS.
+
+\subsection{Removing the Length Byte} \label{no_length_byte}
+In our initial scheme, we stored a length byte in the message metadata. For messages with leading 0's (i.e. the message has a prefix consisting of some number of 0's), it is impossible to recover the leading 0's using our bits-to-cards indexed encoding scheme, as the reverse cards-to-bits function returns an integer value. As such, any leading 0's would be lost, so we added message length to the metadata so that we could manually pad the recovered message with 0's to decode.
+
+Group 3 suggested that we could prepend a 1 bit to the message to preserve leading 0's, and remove the 1 bit before decoding. This allowed us to remove the length byte entirely and save 7 bits of metadata, which improved our agent's performance slightly.
 
 \section{Eight Tournament Domains}
 
