@@ -1,5 +1,7 @@
 \documentclass{article}
 
+\usepackage{graphicx}
+
 \title{Project 3 - Group 8}
 \author{Jeffrey Tao, Martin Ristovski, Vikram Rajan}
 
@@ -43,9 +45,9 @@ One of the easier adjustments we made was in order to reduce the rate of checksu
 The variable-length checksum function we implemented took advantage of a cryptographic hashing function called sha256 from Python's hashlib library. This takes in the bitstring, creates a hash as a long hexstring, which we then convert to binary and take the lowest x bits. 
 
 \subsection{Multiple Domains}
-Then, we added support for multiple message domains. Implementing multiple domains allowed us to use a more efficient encoding scheme for each domain, which in turn decreased the length of our message and made it more resistant to shuffles. However, we also had to dedicate 3 bits of our bitstring to let the decoder know which scheme was used to encode the message. In our testing, this was a worthwhile tradeoff. We added a number of character-based encoding schemes, which also used Huffman coding but with a different set of charcters and thus a different frequency distribution. In particular, we added a domain containing only numbers, a domain containing charcters typically found in English writing (uppercase and lowercase letters, numbers, space, and a few punctuation marks), and a domain containing all printable ASCII characters, which we used as a fallback of sorts, since it is able to encode any message at the cost of efficiency.
+Then, we added support for multiple message domains. Implementing multiple domains allowed us to use a more efficient encoding scheme for each domain, which in turn decreased the length of our message and made it more resistant to shuffles. However, we also had to dedicate 3 bits of our bitstring to let the decoder know which scheme was used to encode the message. In our testing, this was a worthwhile tradeoff. We added a number of character-based encoding schemes, which also used Huffman coding but with a different set of characters and thus a different frequency distribution. In particular, we added a domain containing only numbers, a domain containing charcters typically found in English writing (uppercase and lowercase letters, numbers, space, and a few punctuation marks), and a domain containing all printable ASCII characters, which we used as a fallback of sorts, since it is able to encode any message at the cost of efficiency.
 
-\subsection{Word-based Encoding Schemes}
+\subsection{Dictionary-based Encoding Schemes}
 We further extended our multiple domain approach by implementing word-based encoding schemes. These would map words to integers that referrenced each word's position in a dictionary, allowing the decoder to simply look up each word. This meant that if all words in a message are present in our dictionary, we could encode much longer messages than if we were to use a character-based encoding scheme. The dictionaries we initially included were one of a large number of words in the English language, one of names of people, and one of names of places.
 
 <TODO>: INSERT PLOTS.
@@ -93,6 +95,9 @@ We encode month, day, and year separately as the number of possible dates is muc
 \section{Limitations}
 
 \subsection{Collisions at $n=0$}
+\includegraphics[width=\textwidth]{figures/n_0.png}
+
+The plot above shows recovery rates for $n=0$, i.e. no shuffles. OUr recovery rate is not perfect for some domains. In these cases, we recover \textit{the wrong message}. This is caused by checksum collisions between encoding domains in our variable-card encoding scheme. Since we do not know $c$, the number of cards used to encode a message in the deck, we attempt increasing values of $c$ until we find a message that passes the checksum. It is possible that at some incorrect, lower value of $c$, a different domain's message passes the checksum and is returned. This false positive rate can be lowered by increasing the number of checksum bits, which trades off against message survivability since, as discussed above, longer messages are more likely to be corrupted by fewer shuffles.
 
 \subsection{Impact of Partial Decoding}
 
