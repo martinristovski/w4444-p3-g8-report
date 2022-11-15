@@ -23,9 +23,9 @@ The goal is to be able to send as long as a message as possible given the constr
 
 \section{Initial Implementation}
 
-The first idea that came to mind was to take our message of characters and encode it into a bitstring. To do this, we got a frequency distribution of the letters of the alphabet in English, and used that to generate a Huffman coding. Now that we had a mapping from characters to bits, we needed a mapping from bits to cards. This was done by <TODO>: EXPLAIN BITS-TO-CARDS ENCODING.
+The first idea that came to mind was to take our message of characters and encode it into a bitstring. To do this, we got a frequency distribution of the letters of the alphabet in English, and used that to generate a Huffman coding. Now that we had a mapping from characters to bits, we needed a mapping from bits to cards. To do this, we take our bitstring and the number n cards we want to encode it in. Assuming the integer value of the binary string is less than n!, we divide that up into n bins of size (n-1)!. Then we go segment by segment of the bitstring, and choosing the biggest bin number based off the remaining cards, as the cards can not be reused. These cards go to the bottom of the deck, to remain the most resistant to shuffles, and the rest of the cards are placed on top. 
 
-<TODO>: EXPLAIN DECODING.
+The decode function works in exactly the reverse of this, iterating card by card and checking what the corresponding bin number would be, and combining those to ultimately convert the deck back into the original bitstring. Once we retrieve the intended bitstring from the deck of cards, we break it up into the individual words, as we know the length of the message and bits per word. We convert each of these individual bitstrings into their respective integers, and assuming they are a valid index in our list of words, we translate them. 
 
 To make sure that our solution had few false positives, we implemented a checksum generator, which took as input the bitstring of the compressed message, and then we appended the 8-bit output of that checksum to our bitstring.
 
