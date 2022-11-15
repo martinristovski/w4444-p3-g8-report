@@ -54,11 +54,54 @@ We further extended our multiple domain approach by implementing word-based enco
 
 On November 1, 2022, the class collectively decided to limit the types of messages to ones belonging to 8 domains, one proposed by each group, and each defined by a generator function. Our initial multi-domain apporach allowed us to easily adapt to this part of the tournament specifications, as we were able to build specific encoding schemes for each domain.
 
-The domain we proposed is that of messages of type \_\_\_ <TODO> \_\_\_, as we thought it would be a reasonable proposition that could realistically be used by a spy agency.
+The domain we proposed consists of messages containing names of people and places separated by spaces, as we thought it would be a reasonable proposition that could realistically be used by a spy agency.
+
+To achieve the best possible message recovery rates given our bit-to-card encoding scheme, we wrote custom message-to-bit encoders for each proposed tournament domain by reverse engineering the corresponding generator code. Below, we detail the message domains and our custom encoders.
+
+We use a few generic techniques, referred to below, to encode messages in each of the following domains. In general, we strip away any constant, predictable syntax (field delimeters, message prefix/suffix, e.g. the leading @ sign in Group 3's password domain) and only encode the variable part.
+\begin{enumerate}
+    \item\textbf{Dictionary indexing} For message domains that draw from a word list, we load the word list and assign numbers to each word in the list. This allows words to be referred to efficiently by their index instead of encoding the actual letter sequence.
+    \item\textbf{Constant widths} For messages with highly regular structure but variable length, we can break the message into tokens and encode each token in a constant number of bits $b$. This way, we can decode variable-length messages with no additional information by reading each $b$ bits from the start to the end.
+    \item\textbf{Named known-width fields} For messages with highly regular structure that can be broken into separately encoded parts (henceforth, fields), we can choose a well-known ordering of fields for the domain and encode the message as the concatenation of the fields in the well-known ordering. To decode, we read the number of bits corresponding to the width of each successive field and reassemble the message.
+    \item\textbf{Prefix identification} For messages consisting of concatenations of fixed-width parts, we use the leading bits to identify the token type, which gives the corresponding type length. Thus, we decode the message as a stream, first reading the type $t$ from the encoding prefix, then the next $b_t$ bits, then the next encoding prefix.
+\end{enumerate}
+
+\paragraph{Group 1: Random Characters}
+Group 1's generator produces messages of arbitrary length consisting of lowercase letters, digits, space, and period drawn uniformly randomly. As such, we use \textbf{constant width} sequences mapping bits to indexes in an ordered list of all possible characters (6 bits per character). When decoding, we read each 6 bits and output the corresponding character whose index in the domain is given by the corresponding numeric value.
+
+\paragraph{Group 2: Flights}
+Group 2's generator produces messages consisting of 3-letter airport codes, 4-character reservation IDs, and 8-digit dates, representing a particular flight that an agent should fly on. Our agent encodes this via 5 \textbf{named known-width fields} fields: airport, reservation, month, day, year.
+
+We have the list of all airport names, so we use \textbf{dictionary indexing} to encode them. Reservation codes are length 4 with a known alphabet of uppercase letters and digits, so we use $\left\lceil log_2(36)\right\rceil = 6$ bits to encode each character.
+
+We encode month, day, and year separately as the number of possible dates is much smaller than the corresponding range of numbers, i.e. 01312023 is a valid date, but 14999999 is not. The highest expressible date, $\left\lceil{log_2(12282025)}\right\rceil = 24$, whereas $\left\lceil{log_2(12)}\right\rceil + \left\lceil{log_2(28)}\right\rceil + \left\lceil{log_2(4)}\right\rceil = 11$, so we save 13 bits this way.
+
+\paragraph{Group 3: Passwords} Group 3's generator produces passwords consisting of digits and words. We do not know what order digits and words appear due to a shuffle operation in the generator: sometimes, two words will be adjacent, sometimes an unknown number of consecutive digits. As such, we use a \textbf{prefix identification} encoding, as described above. A 0 prefix denotes a single digit while a 1 prefix denotes an indexed word. Since the number of consecutive digits is unknown, we encode each digit separately to avoid encoding digit sequence length. Words are encoding with \textbf{dictionary indexing}. We strip off the initial @ sign and add it back when decoding.
+
+\paragraph{Group 4: Coordinates} Group 4's generator produces latitude/longitude pairs. Degree values always have exactly 4 decimal places, so we can store all degree values using 7-digit decimal numbers (when decoding, leading 0's in the integer part are ignored). To store the full coordinate, we use \textbf{named known-width fields} for latitude degree, latitude N/S bit, longitude degree, longitude E/W bit. When decoding, we add back formatting (spaces, separating comma).
+
+\paragraph{Group 5: Addresses} Group 5's generator produces random addresses. Street names and suffixes are drawn randomly from dictionaries, while address number can be 1 to 4 digits, possibly with leading 0's. To handle leading 0's, we also store the number length, and pad with 0's if necessary. We use \textbf{named known-width fields} to store number, number length, street name, street suffix, and trailing space bit. Street name and suffix are encoded using \textbf{dictionary indexing}. We found that Group 5's generator had a bug causing it to add a trailing space to all generated addresses except for the last one, so we store an extra bit to denote the presence of a trailing space.
+
+\paragraph{Group 6: n-grams} Group 6's generator produces phrases of $n$ words from a corpus of n-grams derived from recent news articles. As this generator effectively generates ``words'' from a set of 10 dictionaries, we use \textbf{named known-width fields} to store $n$ and a \textbf{dictionary index} into the corresponding $n$-dictionary. We found a slight bug with the n-gram lists in which they sometimes contained $(n-1)$-grams. To compensate, we also search all dictionaries $n' \ge n$ to try to find the corresponding $n$ and index.
+
+\paragraph{Group 7: Words} Group 6's generator produces sequences of space-separated words drawn uniformly randomly from a dictionary. As such, we use \textbf{constant width} fields corresponding to \textbf{dictionary indexes}. We found that some of the bugged $(n-1)$-grams from Group 6 collided with words in Group 7's dictionary. As such, the encoder for Group 7's generator rejects messages with trailing spaces so that they can instead be encoded by the n-gram encoder.
+
+\paragraph{Group 8: Names \& Places} As mentioned earlier, we chose to generate messages with words randomly drawn from dictionaries of names and places. Thus, we use a \textbf{prefix identification} scheme in which a preceding 0 bit denotes a name with a preceding 1 bit denotes a place. The following bits are extracted as \textbf{dictionary indexes}. We realized later that the savings from using this scheme are very marginal: there are 18240 names and 10197 places, which differ by 1 bit in length when encoded. The savings in encoding in this way (vs. combining the dictionaries) would be more substantial for a larger disparity in the dictionary lengths.
 
 \section{Tournament Performance}
 
 \section{Limitations}
+
+\subsection{Collisions at $n=0$}
+
+\subsection{Impact of Partial Decoding}
+
+\section{Conclusion}
+
+\subsection{Acknowledgements}
+We would like to acknowledge Group 3 (Xiaozhou Shi, Rashel Rojas, Noah Silverstein) for the tip to use a single preceding 1 bit instead of a length byte to preserve leading zeros in the message body. This saved 7 bits in our message metadata, which allowed our encoding scheme to survive to higher shuffles than before.
+
+\subsection{Summary of Contributions}
 
 
     
