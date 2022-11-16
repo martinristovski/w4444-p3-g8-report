@@ -35,6 +35,7 @@ The goal is to be able to send as long as a message as possible given the constr
 \subsection{Separating Messages, Bits, and Cards}
 As discussed in class, we implemented separate schemes for encoding string messages to bits and for encoding bits to cards. This allowed us to work on these parts independently and optimize them separately. As the project wore on, this strategy bore fruit as it enabled us to write many different message-to-bits encoders for the different tournament message domains.
 
+
 \subsection{Message-to-bits: Huffman Coding}
 Our initial intuition for encoding messages to bits was to exploit the disparity between how frequently letters occur in the English language. To do this, we found a frequency distribution of the letters of the alphabet in English and used that to generate a Huffman coding. Huffman coding works on the principle that more common characters should have shorter encodings, and less common characters can have longer encodings. Huffman coding is also a \textit{prefix encoding}, meaning that decoding requires no backtracking, as each character has a unique prefix such that decoding is unambiguous. When a character is matched, it is safe to emit that character.
 
@@ -68,7 +69,7 @@ While our solution performed well within this limited message domain, to do well
 \subsection{Better Checksum}
 One of the easier adjustments we made was in order to reduce the rate of checksum collision to further avoid false positives. The purpose of the checksum is to prevent the decoder from deciphering random decks as meaningful messages; however, with the random shuffles, there would be times where the checksum would pass for an invalid message. With an 8-bit checksum, we expected this false positive rate to be 1 out of 256, but the rate we recorded was significantly higher. To address this, we increased the length of our checksum from 8 to 10 bits, which gave us a 4x reduction in the false positive rate.
 
-The variable-length checksum function we implemented took advantage of a cryptographic hashing function called sha256 from Python's hashlib library. This takes in the bitstring and creates a hash as a long hexstring. We then convert the hexstring to binary, and take its lowest $x$ bits. Having a configurable checksum length also proved to be a boon later in the project as it allowed us to experiment freely with checksum lengths to tweak messsage recovery performance.
+The variable-length checksum function we implemented took advantage of a cryptographic hashing function called sha256 from Python's hashlib library. This takes in the bitstring and creates a hash as a long hexstring. We then convert the hexstring to binary, and take its lowest $x$ bits. Having a configurable checksum length also proved to be a boon later in the project as it allowed us to experiment freely with checksum lengths to tweak messsage recovery performance. A comparison of the performance of different checksum lengths is shown in \Cref{fig:checksum}.
 
 \begin{figure}
 \makebox[\textwidth][c]{
@@ -80,10 +81,13 @@ The variable-length checksum function we implemented took advantage of a cryptog
 \includegraphics[width=0.45\paperwidth]{figures/checksum_15.png}
 }
 \caption{Comparison of message recovery performance for checksums of length 7, 8, 10, and 15 bits. Longer checksums rapidly improve performance up to approximately 10 bits by reducing the probability of message decode collisions, after which longer checksums diminish performance by making the metadata section longer.}
+\label{fig:checksum}
 \end{figure}
 
 \subsection{Multiple Domains}
 Then, we added support for multiple message domains. Implementing multiple domains allowed us to use a more efficient encoding scheme for each domain, which in turn decreased the length of our message and made it more resistant to shuffles. However, we also had to dedicate 3 bits of our bitstring to let the decoder know which scheme was used to encode the message. In our testing, this was a worthwhile tradeoff. We added a number of character-based encoding schemes, which also used Huffman coding but with a different set of characters and thus a different frequency distribution. In particular, we added a domain containing only numbers, a domain containing charcters typically found in English writing (uppercase and lowercase letters, numbers, space, and a few punctuation marks), and a domain containing all printable ASCII characters, which we used as a fallback of sorts, since it is able to encode any message at the cost of efficiency.
+
+To best take advantage of having multiple encodings, our agent attempts to use every encoding scheme at its disposal for a message. When a particular encoding scheme cannot encode a message (e.g. the message contains characters not in its alphabet), the encoding scheme is skipped. Our agent takes the encoding scheme which successfully encodes the message in the fewest bits. To track which encoding scheme to use when decoding, we assign each encoding scheme a numeric ID and include it in our message metadata.
 
 \subsection{Dictionary-based Encoding Schemes}
 We further extended our multiple domain approach by implementing word-based encoding schemes. These would map words to integers that referrenced each word's position in a dictionary, allowing the decoder to simply look up each word. This meant that if all words in a message are present in our dictionary, we could encode much longer messages than if we were to use a character-based encoding scheme. The dictionaries we initially included were one of a large number of words in the English language, one of names of people, and one of names of places.
@@ -188,6 +192,8 @@ As shown by the above figure, our agent is now one of the top-performing for dom
 \includegraphics[width=0.9\paperwidth]{figures/domain_3.png}
 }
 For domain 3 (passwords), we are surprised to find that our agent is the clear standout winner. We attribute this performance to our compact message-to-bits encoding for this domain, discussed in detail in \Cref{domains}.
+
+Despite our agent's performance on this domain, it cannot actually encode all possible messages due to a bug in our encoding algorithm. When two or more dictionary words are concatenated, our encoding algorithm must find how to tokenize the string into words. Our algorithm uses a greedy match for the longest word that is in the dictionary. In some cases, the prefix of a succeeding word may form a valid dictionary word when suffixed to the preceding word. This would not be resolved using reluctant matching: using reluctant matching, it would be possible to drop suffixes of words when their prefix is also a dictionary word, leaving unmatched substrings. A proper algorithm to tokenize concatenated words correctly would need to search the space of possible tokenizations until it found one that consumes the whole substring.
 
 \subsection{Domain 4 \& 5}
 \makebox[\textwidth][c]{
