@@ -59,6 +59,8 @@ Furthermore, due to our bits-to-cards integer encoding scheme, we found that lea
 
 Our early performance was already quite promising, shown in \Cref{fig:early_agent}.
 
+\FloatBarrier
+
 \section{Improvements}
 
 While our solution performed well within this limited message domain, to do well on the tournament there were a number of extensions that we'd need to make. 
@@ -67,6 +69,18 @@ While our solution performed well within this limited message domain, to do well
 One of the easier adjustments we made was in order to reduce the rate of checksum collision to further avoid false positives. The purpose of the checksum is to prevent the decoder from deciphering random decks as meaningful messages; however, with the random shuffles, there would be times where the checksum would pass for an invalid message. With an 8-bit checksum, we expected this false positive rate to be 1 out of 256, but the rate we recorded was significantly higher. To accomplish this, we increased the length of our checksum from 8 to 10 bits, which gave us a 4x reduction in the false positive rate.
 
 The variable-length checksum function we implemented took advantage of a cryptographic hashing function called sha256 from Python's hashlib library. This takes in the bitstring, creates a hash as a long hexstring, which we then convert to binary and take the lowest x bits. Having a configurable checksum length also proved to be a boon later in the project as it allowed us to experiment freely with checksum lengths to tweak messsage recovery performance.
+
+\begin{figure}
+\makebox[\textwidth][c]{
+\includegraphics[width=0.45\paperwidth]{figures/checksum_7.png}
+\includegraphics[width=0.45\paperwidth]{figures/checksum_8.png}
+}
+\makebox[\textwidth][c]{
+\includegraphics[width=0.45\paperwidth]{figures/checksum_10.png}
+\includegraphics[width=0.45\paperwidth]{figures/checksum_15.png}
+}
+\caption{Comparison of message recovery performance for checksums of length 7, 8, 10, and 15 bits. Longer checksums rapidly improve performance up to approximately 10 bits by reducing the probability of message decode collisions, after which longer checksums diminish performance by making the metadata section longer.}
+\end{figure}
 
 \subsection{Multiple Domains}
 Then, we added support for multiple message domains. Implementing multiple domains allowed us to use a more efficient encoding scheme for each domain, which in turn decreased the length of our message and made it more resistant to shuffles. However, we also had to dedicate 3 bits of our bitstring to let the decoder know which scheme was used to encode the message. In our testing, this was a worthwhile tradeoff. We added a number of character-based encoding schemes, which also used Huffman coding but with a different set of characters and thus a different frequency distribution. In particular, we added a domain containing only numbers, a domain containing charcters typically found in English writing (uppercase and lowercase letters, numbers, space, and a few punctuation marks), and a domain containing all printable ASCII characters, which we used as a fallback of sorts, since it is able to encode any message at the cost of efficiency.
@@ -77,7 +91,7 @@ We further extended our multiple domain approach by implementing word-based enco
 \subsection{Removing the Length Byte} \label{no_length_byte}
 In our initial scheme, we stored a length byte in the message metadata. For messages with leading 0's (i.e. the message has a prefix consisting of some number of 0's), it is impossible to recover the leading 0's using our bits-to-cards indexed encoding scheme, as the reverse cards-to-bits function returns an integer value. As such, any leading 0's would be lost, so we added message length to the metadata so that we could manually pad the recovered message with 0's to decode.
 
-\begin{figure}[H]
+\begin{figure}
     \centering
     \includegraphics[width=0.9\textwidth]{figures/length_byte.png}
     \includegraphics[width=0.9\textwidth]{figures/leading_1.png}
@@ -86,6 +100,8 @@ In our initial scheme, we stored a length byte in the message metadata. For mess
 \end{figure}
 
 Group 3 suggested that we could prepend a 1 bit to the message to preserve leading 0's, and remove the 1 bit before decoding. This allowed us to remove the length byte entirely and save 7 bits of metadata, which improved our agent's performance slightly. This is visualized in \Cref{fig:no_length_byte}.
+
+\FloatBarrier
 
 \section{Eight Tournament Domains} \label{domains}
 
