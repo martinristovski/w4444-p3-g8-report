@@ -1,11 +1,16 @@
-\documentclass{article}
+\documentclass[titlepage]{article}
 
+\usepackage[margin=1.5in]{geometry}
 \usepackage{graphicx}
 \usepackage{hyperref}
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{amsmath}
 \usepackage[noabbrev,nameinlink]{cleveref}
 
-\title{Project 3 - Group 8}
+\title{COMS 4444: Project 3, Group 8}
 \author{Jeffrey Tao, Martin Ristovski, Vikram Rajan}
+\date{November 2022}
 
 \begin{document}
 
@@ -45,14 +50,14 @@ We do not actually know the value of $c$ used to encode bits in the deck. As suc
 
 Furthermore, due to our bits-to-cards integer encoding scheme, we found that leading 0's would be dropped when decoding the bit string from cards. As such, we elected to add a length byte to the message metadata. A better solution to this problem is discussed in \cref{no_length_byte}.
 
-Our early performance was already quite promising, shown in \Cref{fig:early_agent}.
-
 \begin{figure}
     \centering
     \includegraphics[width=\textwidth]{figures/early_agent.png}
     \caption{Our initial agent's performance on sequences of lowercase letters drawn uniformly randomly. The vertical axis shows recovery rate, i.e. the proportion of messages that are exactly recovered. Number of shuffles increases along the horizontal axis. Each color encodes the length of the message: longer messages tend to be harder to recover, while shorter messages survive more shuffles.}
     \label{fig:early_agent}
 \end{figure}
+
+Our early performance was already quite promising, shown in \Cref{fig:early_agent}.
 
 \section{Improvements}
 
@@ -69,14 +74,20 @@ Then, we added support for multiple message domains. Implementing multiple domai
 \subsection{Dictionary-based Encoding Schemes}
 We further extended our multiple domain approach by implementing word-based encoding schemes. These would map words to integers that referrenced each word's position in a dictionary, allowing the decoder to simply look up each word. This meant that if all words in a message are present in our dictionary, we could encode much longer messages than if we were to use a character-based encoding scheme. The dictionaries we initially included were one of a large number of words in the English language, one of names of people, and one of names of places.
 
-<TODO>: INSERT PLOTS.
-
 \subsection{Removing the Length Byte} \label{no_length_byte}
 In our initial scheme, we stored a length byte in the message metadata. For messages with leading 0's (i.e. the message has a prefix consisting of some number of 0's), it is impossible to recover the leading 0's using our bits-to-cards indexed encoding scheme, as the reverse cards-to-bits function returns an integer value. As such, any leading 0's would be lost, so we added message length to the metadata so that we could manually pad the recovered message with 0's to decode.
 
-Group 3 suggested that we could prepend a 1 bit to the message to preserve leading 0's, and remove the 1 bit before decoding. This allowed us to remove the length byte entirely and save 7 bits of metadata, which improved our agent's performance slightly.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/length_byte.png}
+    \includegraphics[width=0.9\textwidth]{figures/leading_1.png}
+    \caption{Above: recovery curves on the domain of random lowercase letters for our agent using the length byte. Below: recovery curves on the same domain for our agent using the leading 1 bit. Removing 7 bits from the metadata pushes all of the curves towards the right, meaning that more messages survive a higher number of shuffles.}
+    \label{fig:no_length_byte}
+\end{figure}
 
-\section{Eight Tournament Domains}
+Group 3 suggested that we could prepend a 1 bit to the message to preserve leading 0's, and remove the 1 bit before decoding. This allowed us to remove the length byte entirely and save 7 bits of metadata, which improved our agent's performance slightly. This is visualized in \Cref{fig:no_length_byte}.
+
+\section{Eight Tournament Domains} \label{domains}
 
 On November 1, 2022, the class collectively decided to limit the types of messages to ones belonging to 8 domains, one proposed by each group, and each defined by a generator function. Our initial multi-domain apporach allowed us to easily adapt to this part of the tournament specifications, as we were able to build specific encoding schemes for each domain.
 
@@ -115,23 +126,106 @@ We encode month, day, and year separately as the number of possible dates is muc
 \paragraph{Group 8: Names \& Places} As mentioned earlier, we chose to generate messages with words randomly drawn from dictionaries of names and places. Thus, we use a \textbf{prefix identification} scheme in which a preceding 0 bit denotes a name with a preceding 1 bit denotes a place. The following bits are extracted as \textbf{dictionary indexes}. We realized later that the savings from using this scheme are very marginal: there are 18240 names and 10197 places, which differ by 1 bit in length when encoded. The savings in encoding in this way (vs. combining the dictionaries) would be more substantial for a larger disparity in the dictionary lengths.
 
 \section{Tournament Performance}
+In the tournament, each generator was used to generate 3 ``batches'' of messages, each containing a certain number of messages. The message content in a batch was held constant as the number of shuffles $n$ was varied. Batches and shuffle permutations were held constant across all agents to get as close of a comparison between agents as possible.
 
-\section{Limitations}
+The analyses below were performed by coalescing all available results for each (agent, domain) pair, meaning that batches were treated as being all one batch. One caveat is that not all batches were run on all agents due to timeouts. The total number of results per-group per-domain are visualized in \Cref{fig:totals}. This means that in the per-domain analyses below, results for groups 1, 5, and 7 are backed by the most datapoints; with groups 2, 3, and 4 having an order of magnitude fewer datapoints; and groups 6 and 7 having fewer still. In the analyses below, we use average recovery rate, i.e. for all datapoints $D_i$:
 
-\subsection{Collisions at $n=0$}
-\includegraphics[width=\textwidth]{figures/n_0.png}
+\begin{figure}[ht]
+    \makebox[\textwidth][c]{
+        \includegraphics[width=0.9\paperwidth]{figures/group_domain_result_counts.png}
+    }
+    \caption{Total number of results per-group per-domain.}
+    \label{fig:totals}
+\end{figure}
 
-The plot above shows recovery rates for $n=0$, i.e. no shuffles. OUr recovery rate is not perfect for some domains. In these cases, we recover \textit{the wrong message}. This is caused by checksum collisions between encoding domains in our variable-card encoding scheme. Since we do not know $c$, the number of cards used to encode a message in the deck, we attempt increasing values of $c$ until we find a message that passes the checksum. It is possible that at some incorrect, lower value of $c$, a different domain's message passes the checksum and is returned. This false positive rate can be lowered by increasing the number of checksum bits, which trades off against message survivability since, as discussed above, longer messages are more likely to be corrupted by fewer shuffles.
 
-\subsection{Impact of Partial Decoding}
+\begin{equation*}
+    \text{Average Recovery Rate} = \frac{\sum_i D^\text{score}_i}{i}
+\end{equation*}
+
+Bars in the visualizations below for groups with fewer datapoints should be considered to have a higher degree of error compared to groups with more datapoints. However, for all groups besides group 6, there are hundreds of thousands of datapoints per-domain, so these results should also be considered stable. We find that our agent is the top performer for domains 3, 6, and 7. For domains 4, 5, and 8, our agent is generally competitive with other top-performing agents. Our agent underperforms on domains 1 and 2.
+
+\FloatBarrier
+
+\subsection{Domain 1}
+\makebox[\textwidth][c]{
+\includegraphics[width=0.9\paperwidth]{figures/domain_1.png}
+}
+
+For domain 1 (random characters), we find that our agent is generally competitive at higher values of $n$, but underperforms other agents for lower values of $n$. This is likely due to lack of support for truncation of long messages/partial recovery, as discussed in \Cref{future}.
+
+\subsection{Domain 2}
+\makebox[\textwidth][c]{
+\includegraphics[width=0.9\paperwidth]{figures/domain_2.png}
+}
+
+For domain 2 (flights), our agent is competitive at $n=0, 10$, but has a sharp decrease in effectiveness at $n=20$. This domain is the one on which our agent underperforms by the largest margin. We investigated the reason for this and found that our codec for dates was failing to encode months/days with leading 0's. Fixing this trivial bug improved our agent's performance substantially, as shown below.
+
+\makebox[\textwidth][c]{
+\includegraphics[width=0.9\paperwidth]{figures/domain_2_fixed.png}
+}
+
+As shown by the above figure, our agent is now one of the top-performing for domain 2 with the fix applied. We attribute this high performance to our compact message-to-bits representation of the flight domain, discussed in detail in \Cref{domains}.
+
+\subsection{Domain 3}
+\makebox[\textwidth][c]{
+\includegraphics[width=0.9\paperwidth]{figures/domain_3.png}
+}
+For domain 3 (passwords), we are surprised to find that our agent is the clear standout winner. We attribute this performance to our compact message-to-bits encoding for this domain, discussed in detail in \Cref{domains}.
+
+\subsection{Domain 4 \& 5}
+\makebox[\textwidth][c]{
+\includegraphics[width=0.45\paperwidth]{figures/domain_4.png}
+\includegraphics[width=0.45\paperwidth]{figures/domain_5.png}
+}
+
+For domains 4 (coordinates) and 5 (addresses), our agent is among the top performing. In domain 4, our agent is basically tied with Agent 6 on higher values of $n$. In domain 5, Agent 6 has a slight lead for higher value of $n$.
+
+\subsection{Domain 6 \& 7}
+\makebox[\textwidth][c]{
+\includegraphics[width=0.45\paperwidth]{figures/domain_6.png}
+\includegraphics[width=0.45\paperwidth]{figures/domain_7.png}
+}
+
+Domains 6 (n-grams) and 7 (words) are both dictionary-based domains that are very easily represented using our \textbf{dictionary indexing} technique. As such, we achieve a very compact binary representation for the messages and are the best-performing group at high values of $n$. Domain 6, in particular is highly compact, which is why a substantial proportion of messages from that domain can survive to $> 70$ shuffles.
+
+\subsection{Domain 8}
+\makebox[\textwidth][c]{
+\includegraphics[width=0.9\paperwidth]{figures/domain_8.png}
+}
+
+For domain 8 (names and places), Our agent slightly underperforms other agents for low values of $n$. We attribute this to lack of support for truncation of long messages/partial recovery. As the generator for this domain supports arbitrary length messages, there are some messages that the encoder simply rejects for being too long. A resolution for this is discussed in \Cref{future}.
+
+\subsection{NULL Domain}
+\makebox[\textwidth][c]{
+\includegraphics[width=0.9\paperwidth]{figures/domain_null.png}
+}
+
+Most agents perform well on the NULL domain. We find that our agent is among the top performers for rejecting NULL decks across values of $n$. We attribute this high performance to our long checksum (10 bits), which makes the probability of interpreting a random deck as a valid message low.
+
+
 
 \section{Conclusion}
+
+Our agent employs an index-based bits-to-cards encoding and a variety of domain-specific message-to-bits encoders. We are generally satisfied with the performance of our agent in the tournament.
+
+\subsection{Failed Recovery at $n=0$} \label{n_0}
+\includegraphics[width=\textwidth]{figures/n_0.png}
+
+The plot above shows recovery rates for $n=0$, i.e. no shuffles, across all domains. Our recovery rate is not perfect for some domains. This is caused by a combination of two factors: long messages and mistaken recovery. The dominant factor in why our recovery rate is not perfect for $n=0$ on domains 1 and 8 is message length: for messages that are too long to encode in the deck, we do not attempt to shorten the message and perform a partial decode. This effect is most pronounced on domains 1 and 8 because the generators for 1 and 8 have configurable lengths, allowing arbitrarily long messages to be generated.
+
+For cases of mistaken recovery, we recover \textit{the wrong message} despite there being no shuffles. This is caused by checksum collisions between encoding domains in our variable-card encoding scheme. Since we do not know $c$, the number of cards used to encode a message in the deck, we attempt increasing values of $c$ until we find a message that passes the checksum. It is possible that at some incorrect, lower value of $c$, a different domain's message passes the checksum and is returned. This false positive rate can be lowered by increasing the number of checksum bits, which trades off against message survivability since, as discussed above, longer messages are more likely to be corrupted by fewer shuffles.
+
+\subsection{Future Work} \label{future}
+Our agent could perform significantly better if it supported partial recovery via truncated messages. As discussed in \Cref{n_0}, messages that are too long will fail to be encoded. A better strategy would be to remove tokens from the end of the message and attempt to re-encode until the message fits in the deck. We expect that applying this strategy would improve our agent's performance on longer messages in Domains 1 and 8.
+
+Our agent does not support partial recovery for messages corrupted by shuffles. As discussed in class, partial recovery would require a break from the index-based bits-to-cards encoding scheme that most groups used. Using fewer cards results in significantly lower bit density per-card, making trading off between partial recovery and bit density difficult.
 
 \subsection{Acknowledgements}
 We would like to acknowledge Group 3 (Xiaozhou Shi, Rashel Rojas, Noah Silverstein) for the tip to use a single preceding 1 bit instead of a length byte to preserve leading zeros in the message body. This saved 7 bits in our message metadata, which allowed our encoding scheme to survive to higher shuffles than before.
 
 \subsection{Summary of Contributions}
+Jeff worked on the ``index''-based bits-to-cards encoding scheme, the metadata structure, and the custom domain encoders for tournament domains.
 
 
-    
 \end{document}
