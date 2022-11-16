@@ -241,7 +241,7 @@ Our agent does not support partial recovery for messages corrupted by shuffles. 
 We would like to acknowledge Group 3 (Xiaozhou Shi, Rashel Rojas, Noah Silverstein) for the tip to use a single preceding 1 bit instead of a length byte to preserve leading zeros in the message body. This saved 7 bits in our message metadata, which allowed our encoding scheme to survive to higher shuffles than before.
 
 \subsection{Summary of Contributions}
-Jeff worked on the ``index''-based bits-to-cards encoding scheme, the metadata structure, and the custom domain encoders for tournament domains.
+Jeff worked on the ``index''-based bits-to-cards encoding scheme, the metadata structure, and the custom domain encoders for tournament domains. Vikram worked on the initial checksum function, and the improved variable-length one allowing reducing the false positive rate. 
 
 
 \end{document}
